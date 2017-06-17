@@ -58,14 +58,12 @@ std::vector<int> porty;
 std::vector<int> otwarte_porty;
 std::vector<Wynik> wynik_tracerouta;
 std::vector<char*> martwe_adresy_IP;
-std::vector<int> zablokowane_porty;
 std::mutex adresy_IPGuard;
 std::mutex zywe_adresy_IPGuard;
 std::mutex martwe_adresy_IPGuard;
 std::mutex portyGuard;
 std::mutex otwarte_portyGuard;
 std::mutex wynik_traceroutaGuard;
-std::mutex zablokowane_portyGuard;
 
 
 auto generator_liczb_losowych(int koniec)
@@ -220,7 +218,7 @@ void losuj_PortThread()
   portyGuard.unlock();
 }
 
-void pingThread()
+void pingowanie()
 {
   zywe_adresy_IPGuard.lock();
   adresy_IPGuard.lock();
@@ -246,48 +244,20 @@ void tracertThread()
 {
   zywe_adresy_IPGuard.lock();
   wynik_traceroutaGuard.lock();
-  std::string *wyniki, *cos;
+  std::string *wyniki;
   Wynik w;
   wyniki = traceroute(zywe_adresy_IP.back());
   zywe_adresy_IP.pop_back();
   int i = 0;
-  std::cout<<wyniki[i]<<std::endl;
-  while(!wyniki[i].empty())
+  while(wyniki[i].empty())
     {
+     w.adres_IP[i] = wyniki[i];
      i++;
     }
-  cos = new std::string[i];
-  for (int j=0;j<i; j++)
-    {
-      w.adres_IP[j] = wyniki[j];
-      
-      //w.adres_IP = &cos;
-  std::cout<< j <<" == " <<w.adres_IP[j] << " == " << wyniki[j]<<std::endl;
-    }
-  
-  wynik_tracerouta.push_back(w);
+  wynik_tracerouta.push_back(wynik);
   wynik_traceroutaGuard.unlock();
   zywe_adresy_IPGuard.unlock();
 }
-
-void skan_portowThread()
-{
-  zywe_adresy_IPGuard.lock();
-  portyGuard.lock();
-  otwarte_portyGuard.lock();
-  zablokowane_portyGuard.lock();
-  if(skaner_portow(porty.back(), zywe_adresy_IP.back()))
-    {
-      otwarte_porty.push_back(porty.back());
-      porty.pop_back();
-    }
-    else
-    {
-      zablokowane_porty.push_back(porty.back());
-      porty.pop_back();
-    }
-}
-
 
 int main()
 {
@@ -295,19 +265,17 @@ int main()
   
   std::string *wynik;
   char *adres_IP = losuj_IP();
-  //std::cout<<adres_IP<<std::endl<<losuj_port()<<std::endl<<"ping: "<<ping(adres_IP)<<std::endl;
+std::cout<<adres_IP<<std::endl<<losuj_port()<<std::endl<<"ping: "<<ping(adres_IP)<<std::endl;
 //std::cout<<skaner_portow(losuj_port(), adres_IP)<<std::endl<<"google.cos: 80 \
 //"<<skaner_portow(53,"8.8.8.8")<<std::endl;
 
  tracertThread();
- int a = 0;
- for(auto const& i: wynik_tracerouta)
+ for(int i = 0; i<30;i++)
    {
-     std::cout<< a << ": "<< i.adres_IP[a] <<std::endl;
-     a++;
+     std::cout<<i<<": "<<wynik_tracerouta[i]<<std::endl;
    }
  
- //std::cout<<traceroute(adres_IP)<<std::endl;
+std::cout<<traceroute(adres_IP)<<std::endl;
 std::cout<<"hasło okoń"<<std::endl;
 return 0;
 }
