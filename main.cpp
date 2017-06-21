@@ -9,7 +9,6 @@
 #include <errno.h>
 #include <sys/signal.h>
 #include <thread>
-#include <iostream>
 #include <string>
 #include <algorithm>
 #include <chrono>
@@ -47,13 +46,16 @@
 #include<mutex>
 #include<condition_variable>
 #include<atomic>
-#include<ncurses.h>
+#include <ncurses.h>
+#include<form.h>
+#include <assert.h>
 
 #define SA (struct sockaddr*)
 struct Wynik
 {
   std::string adres_IP[30];
 };
+
 
 std::vector<char*> adresy_IP;
 std::vector<char*> zywe_adresy_IP;
@@ -78,6 +80,7 @@ std::condition_variable cv1;
 std::condition_variable cv2;
 std::condition_variable cv3;
 std::condition_variable cv4;
+std::atomic<int> count(0);
 
 auto generator_liczb_losowych(int koniec)
 {
@@ -99,7 +102,8 @@ auto losuj_IP()
 
 auto losuj_port()
 {
-  return generator_liczb_losowych(1024);
+  count++;
+  return generator_liczb_losowych(1024); 
 }
 
 int ping(char* adres_IP)
@@ -123,10 +127,10 @@ int ping(char* adres_IP)
     }
   int status = ping_send(ping);
   const char *count = ping_get_error (ping);
-  std::cout<<"status> "<<status<<" , count: "<<count<<adres_IP<<std::endl;
+  //std::cout<<"status> "<<status<<" , count: "<<count<<adres_IP<<std::endl;
   if (status == -EINTR)
       {
-	std::cout<<status<<std::endl;
+	//std::cout<<status<<std::endl;
 	return (1);
       }
     else if (status < 0)
@@ -152,9 +156,12 @@ std::string* traceroute(char *adres_IP)
   char buf[4096] = { 0 };
   struct ip *ip_hdr = (struct ip *) buf;
   int hop = 0;
+  int hop2 = 1;
     
   std::string* wynik = new std::string[30];
    int one = 1;
+   wynik[0] = adres_IP;
+   
   const int *val = &one;
   if (setsockopt (sfd, IPPROTO_IP, IP_HDRINCL, val, sizeof (one)) < 0)
     printf ("Cannot set HDRINCL!\n");
@@ -194,15 +201,16 @@ std::string* traceroute(char *adres_IP)
 
       if (icmphd2->type != 0)
 	{
-	printf ("hop limit:%d Address:%s\n", hop, inet_ntoa (addr2.sin_addr));
-	wynik[hop] = inet_ntoa(addr2.sin_addr);
+	 //printf ("hop limit:%d Address:%s\n", hop, inet_ntoa (addr2.sin_addr));
+	wynik[hop2] = inet_ntoa(addr2.sin_addr);
         }
       else
 	{
-	  printf ("Reached destination:%s with hop limit:%d\n",
-		  inet_ntoa (addr2.sin_addr), hop);
+	  //printf ("Reached destination:%s with hop limit:%d\n",
+	  //	  inet_ntoa (addr2.sin_addr), hop);
 	  return wynik;
 	}
+      hop2++;
       hop++;
     }
 
@@ -296,7 +304,7 @@ void losuj_PortThread()
 void pingThread()
 {
  
-  std::cout<< "ping"<<std::endl;
+  // std::cout<< "ping"<<std::endl;
   auto now = std::chrono::system_clock::now();
   std::unique_lock<std::mutex> lock(mutex_);
   cv1.wait(lock);
@@ -323,7 +331,7 @@ void pingThread()
 
 void tracertThread()
 {
-  std::cout<< "tracert"<<std::endl;
+  // std::cout<< "tracert"<<std::endl;
   auto now = std::chrono::system_clock::now();
   std::unique_lock<std::mutex> lock(mutex__);
   // std::unique_lock<std::mutex> lock(mutex4);
@@ -348,7 +356,7 @@ void tracertThread()
   for (int j=1;j<i+1; j++)
     {
       w.adres_IP[j] = wyniki[j];
-      std::cout<< j <<" == " <<w.adres_IP[j] << " == " << wyniki[j]<<std::endl;
+      //  std::cout<< j <<" == " <<w.adres_IP[j] << " == " << wyniki[j]<<std::endl;
     }
   
   wynik_tracerouta.push_back(w);
@@ -374,7 +382,7 @@ void skan_portowThread()
       otwarte_porty.push_back(porty.back());
       porty.pop_back();
       portable_IP.pop_back();
-      std::cout<<"open: "<<otwarte_porty.back()<<std::endl;
+      // std::cout<<"open: "<<otwarte_porty.back()<<std::endl;
       
     }
     else
@@ -382,20 +390,70 @@ void skan_portowThread()
       zablokowane_porty.push_back(porty.back());
       porty.pop_back();
       portable_IP.pop_back();
-      std::cout<<"close: "<<zablokowane_porty.back()<<std::endl;
+      // std::cout<<"close: "<<zablokowane_porty.back()<<std::endl;
     }
-  std::cout<<"koniec"<<std::endl;
+  // std::cout<<"koniec"<<std::endl;
   //cv5.notyfy_one;
     }
 }
 
 auto ncurses()
 {
+  std::vector< std::vector< std::string > > tekst;
+  std::vector<std::string> wiersz;
+  int counter = 1;
+  char top[] = "  Internet MAP 0.2  ";
+  std::string tab[] = {"Żywe adresy IP", "Martwe adresy IP", "Wynik tracerouta", "Otwarte Porty", "Zablokowane Porty"};
+  char ch;
+
+
   initscr();
-  printw ( "Hello World !!!" );
-  getch();
+  cbreak();
+ 
+  keypad(stdscr, TRUE);
+  
+  int height;
+  int width;
+  getmaxyx( stdscr, height, width);
+  refresh();
+  //win = newwin(height, width, starty, startx);
+  //wborder(win, '|', '|', '-', '-', '+', '+', '+', '+');
+  //box(win, 0, 0);
+  //wrefresh(win);
+  start_color(); //2
+  init_pair( 1, COLOR_RED, COLOR_WHITE ); //3
+  init_pair( 2, COLOR_BLACK,COLOR_GREEN );
+  attron( COLOR_PAIR( 1 ) );
+  move ( height / 200,((width)/2 - sizeof(top) / 2) );
+  printw( "%s", top );
+   attroff(COLOR_PAIR( 1 ) );
+  attron(COLOR_PAIR( 2 ) );
+  // printw("%u", rzedy);
+  move(height/32,0);
+  for(int i = 0; i<5; i++)
+    {
+      for(int e = 0; e<(width-sizeof(tab))/height*4; e++)
+	 printw(" ");
+       printw("%s", tab[i].c_str() );
+       if(i == 2)
+	 {
+       for(int e = 0; e<(width-sizeof(tab))/3; e++)
+	 printw(" ");
+	 }
+    }
+  attroff(COLOR_PAIR( 2 ) );
+  while((ch = getch()) != KEY_F(1))
+    {
+      int j = 1;
+      int z = 0, m = 0, zab = 0, o = 0;
+      
+      counter++;
+    } 
+  refresh();
+  getch();  
   endwin();
   return 0;
+
 }
 
 int main()
